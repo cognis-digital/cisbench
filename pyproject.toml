@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cognis-cisbench"
+version = "0.1.0"
+description = "Offline CIS-benchmark-style configuration checker for database hardening settings."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Cognis Digital" }]
+maintainers = [{ name = "Cognis Digital" }]
+keywords = ["security", "hardening", "benchmark", "compliance", "database", "cis", "audit"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Security",
+]
+
+[project.urls]
+Homepage = "https://github.com/cognis-digital/cisbench"
+
+[project.scripts]
+cisbench = "cisbench.cli:main"
+
+[tool.setuptools]
+packages = ["cisbench"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

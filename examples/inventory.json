@@ -1,0 +1,29 @@
+{
+  "_comment": "Example offline database inventory snapshot for cisbench. This is fictional configuration data, not a live connection. Edit the values to model your own deployment.",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.2,
+      "bind_address": "10.0.4.21"
+    },
+    "auth": {
+      "password_min_length": 12,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 25,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 30
+    },
+    "accounts": {
+      "default_admin_renamed": false
+    },
+    "storage": {
+      "encryption_at_rest": true
+    },
+    "diagnostics": {
+      "verbose_client_errors": true
+    }
+  }
+}

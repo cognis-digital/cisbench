@@ -1,0 +1,25 @@
+{
+  "name": "minimal-tls-profile",
+  "version": "1.0",
+  "description": "A small example custom profile that checks only transport security. Demonstrates the --profile flag.",
+  "checks": [
+    {
+      "id": "MIN-1",
+      "title": "TLS is required for client connections",
+      "path": "network.require_tls",
+      "operator": "is_true",
+      "reference": "MIN-NET-1",
+      "severity": "critical",
+      "remediation": "Enable mandatory TLS at the listener."
+    },
+    {
+      "id": "MIN-2",
+      "title": "Data-at-rest encryption is enabled",
+      "path": "storage.encryption_at_rest",
+      "operator": "is_true",
+      "reference": "MIN-DAT-1",
+      "severity": "high",
+      "remediation": "Enable transparent data-at-rest encryption."
+    }
+  ]
+}
