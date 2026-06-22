@@ -22,6 +22,7 @@ DEFAULT_PROFILE = {
             "path": "network.require_tls",
             "operator": "is_true",
             "reference": "CDB-NET-1",
+            "nist_controls": ["sc-8", "sc-8.1"],
             "severity": "critical",
             "description": (
                 "Client-to-server traffic should be encrypted in transit so "
@@ -39,6 +40,7 @@ DEFAULT_PROFILE = {
             "operator": "gte",
             "expected": 1.2,
             "reference": "CDB-NET-2",
+            "nist_controls": ["sc-8", "sc-13"],
             "severity": "high",
             "description": (
                 "Legacy TLS and SSL versions contain known weaknesses and "
@@ -56,6 +58,7 @@ DEFAULT_PROFILE = {
             "operator": "gte",
             "expected": 14,
             "reference": "CDB-AUTH-1",
+            "nist_controls": ["ia-5", "ia-5.1"],
             "severity": "high",
             "description": (
                 "Account passwords should meet a minimum length to resist "
@@ -72,6 +75,7 @@ DEFAULT_PROFILE = {
             "path": "auth.password_complexity_enabled",
             "operator": "is_true",
             "reference": "CDB-AUTH-2",
+            "nist_controls": ["ia-5", "ia-5.1"],
             "severity": "medium",
             "description": (
                 "Complexity rules reduce the prevalence of trivially "
@@ -89,6 +93,7 @@ DEFAULT_PROFILE = {
             "operator": "lte",
             "expected": 10,
             "reference": "CDB-AUTH-3",
+            "nist_controls": ["ac-7"],
             "severity": "medium",
             "description": (
                 "Locking accounts after repeated failures slows online "
@@ -105,6 +110,7 @@ DEFAULT_PROFILE = {
             "path": "audit.logging_enabled",
             "operator": "is_true",
             "reference": "CDB-AUD-1",
+            "nist_controls": ["au-2", "au-12"],
             "severity": "high",
             "description": (
                 "An audit trail of administrative and security-relevant "
@@ -122,6 +128,7 @@ DEFAULT_PROFILE = {
             "operator": "gte",
             "expected": 90,
             "reference": "CDB-AUD-2",
+            "nist_controls": ["au-11"],
             "severity": "medium",
             "description": (
                 "Audit records must be retained long enough to support "
@@ -138,6 +145,7 @@ DEFAULT_PROFILE = {
             "path": "auth.anonymous_login_enabled",
             "operator": "is_false",
             "reference": "CDB-ACC-1",
+            "nist_controls": ["ac-14", "ia-2"],
             "severity": "critical",
             "description": (
                 "Unauthenticated or guest access removes accountability and "
@@ -154,6 +162,7 @@ DEFAULT_PROFILE = {
             "path": "accounts.default_admin_renamed",
             "operator": "is_true",
             "reference": "CDB-ACC-2",
+            "nist_controls": ["ac-2", "ia-2"],
             "severity": "medium",
             "description": (
                 "Renaming the well-known default administrator account raises "
@@ -171,6 +180,7 @@ DEFAULT_PROFILE = {
             "operator": "not_equals",
             "expected": "0.0.0.0",
             "reference": "CDB-NET-3",
+            "nist_controls": ["sc-7", "ca-3"],
             "severity": "high",
             "description": (
                 "Binding to all interfaces can needlessly expose the "
@@ -187,6 +197,7 @@ DEFAULT_PROFILE = {
             "path": "storage.encryption_at_rest",
             "operator": "is_true",
             "reference": "CDB-DAT-1",
+            "nist_controls": ["sc-28", "sc-28.1"],
             "severity": "high",
             "description": (
                 "Encrypting stored data protects confidentiality if storage "
@@ -203,6 +214,7 @@ DEFAULT_PROFILE = {
             "path": "diagnostics.verbose_client_errors",
             "operator": "is_false",
             "reference": "CDB-DIA-1",
+            "nist_controls": ["si-11"],
             "severity": "low",
             "description": (
                 "Detailed internal error messages can leak schema and "

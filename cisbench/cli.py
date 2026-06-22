@@ -1,9 +1,11 @@
 """Command-line interface for cisbench.
 
 Subcommands:
-    scan    evaluate a profile against an inventory and report results
-    list    print the catalog of checks in a profile
-    check   evaluate a single check by id against an inventory
+    scan       evaluate a profile against an inventory and report results
+    list       print the catalog of checks in a profile
+    check      evaluate a single check by id against an inventory
+    crosswalk  map each check to authoritative NIST 800-53 rev5 controls
+    feeds      manage the edge/air-gap data-feed cache (list/update/get)
 
 Exit codes:
     0   success / all gates satisfied
@@ -18,7 +20,8 @@ import json
 import sys
 from typing import Any
 
-from . import __version__
+from . import __version__, datafeeds
+from .crosswalk import FEED_ID, build_index, enrich_profile, load_catalog
 from .engine import evaluate_check
 from .profile import (
     Profile,
@@ -169,6 +172,133 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------
+# crosswalk  (real enrichment: map checks -> authoritative NIST 800-53 rev5)
+# --------------------------------------------------------------------------
+def cmd_crosswalk(args: argparse.Namespace) -> int:
+    profile = _load_profile(args)
+    try:
+        rows = enrich_profile(profile, offline=args.offline)
+    except FileNotFoundError:
+        print("error: NIST 800-53 catalog is not cached. Run "
+              "'cisbench feeds update' while online, or import an air-gap "
+              "snapshot, before using --offline.", file=sys.stderr)
+        return EXIT_USAGE
+    except ConnectionError as exc:
+        print(f"error: could not fetch the 800-53 catalog: {exc}\n"
+              "       use --offline once the cache is populated.",
+              file=sys.stderr)
+        return EXIT_USAGE
+
+    if args.json:
+        print(json.dumps({"profile": profile.name, "checks": rows}, indent=2))
+        return EXIT_OK
+
+    color = _use_color(args)
+    print()
+    print(_color(f"NIST SP 800-53 rev5 crosswalk — profile: {profile.name}",
+                 _BOLD, color))
+    print(_color("source: usnistgov/oscal-content (authoritative OSCAL "
+                 "catalog)", _BOLD, color))
+    print("=" * 72)
+    unmapped = 0
+    for row in rows:
+        print(f"{row['check_id']:<10} [{row['severity']:<8}] {row['title']}")
+        if not row["controls"]:
+            print("           (no NIST 800-53 controls tagged)")
+            continue
+        for c in row["controls"]:
+            if c["resolved"]:
+                print(f"           -> {c['label']:<10} {c['title']}  "
+                      f"[{c['family']}]")
+            else:
+                unmapped += 1
+                print(f"           -> {c['requested']:<10} "
+                      + _color("UNRESOLVED in catalog", _RED, color))
+    print("-" * 72)
+    mapped_checks = sum(1 for r in rows if r["controls"])
+    print(f"{mapped_checks}/{len(rows)} checks carry 800-53 mappings; "
+          f"{unmapped} control id(s) unresolved.")
+    print()
+    return EXIT_GATE_FAILED if (args.fail_on_unmapped and unmapped) else EXIT_OK
+
+
+# --------------------------------------------------------------------------
+# feeds  (edge/air-gap data-feed cache management)
+# --------------------------------------------------------------------------
+
+# cisbench only consumes these feed ids from the shared catalog.
+RELEVANT_FEEDS = [FEED_ID]
+
+
+def _relevant_or_error(feed_id: str) -> bool:
+    if feed_id not in RELEVANT_FEEDS:
+        print(f"error: '{feed_id}' is not a feed cisbench consumes. "
+              f"Relevant feeds: {', '.join(RELEVANT_FEEDS)}", file=sys.stderr)
+        return False
+    return True
+
+
+def cmd_feeds(args: argparse.Namespace) -> int:
+    action = args.feeds_action
+    catalog = datafeeds.load_catalog()
+    by_id = {f["id"]: f for f in catalog.get("feeds", [])}
+
+    if action == "list":
+        print()
+        print("cisbench data feeds (edge/air-gap ingestion):")
+        print("=" * 72)
+        for fid in RELEVANT_FEEDS:
+            meta = by_id.get(fid, {})
+            age = datafeeds.cached_age_hours(fid)
+            fresh = "uncached" if age is None else f"cached {age:.1f}h ago"
+            print(f"  {fid}")
+            print(f"      {meta.get('name', '')}")
+            print(f"      domain={meta.get('domain', '')}  "
+                  f"format={meta.get('format', '')}  [{fresh}]")
+            print(f"      url={meta.get('url', '')}")
+        print()
+        return EXIT_OK
+
+    if action == "update":
+        rc = EXIT_OK
+        for fid in (args.ids or RELEVANT_FEEDS):
+            if not _relevant_or_error(fid):
+                rc = EXIT_USAGE
+                continue
+            try:
+                pth = datafeeds.update(fid)
+                print(f"  updated {fid} -> {pth} "
+                      f"({pth.stat().st_size} bytes)")
+            except (KeyError, ConnectionError) as exc:
+                print(f"  {fid}: {exc}", file=sys.stderr)
+                rc = EXIT_USAGE
+        return rc
+
+    if action == "get":
+        if not _relevant_or_error(args.id):
+            return EXIT_USAGE
+        try:
+            data = datafeeds.get(args.id, offline=args.offline)
+        except (KeyError, FileNotFoundError, ConnectionError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_USAGE
+        if args.id == FEED_ID:
+            # Print a compact summary rather than the 10 MB catalog.
+            index = build_index(data)
+            families = sorted({c.family_id for c in index.values()})
+            print(f"feed: {args.id}")
+            print(f"controls indexed: {len(index)}")
+            print(f"families: {len(families)} ({', '.join(families)})")
+        else:  # pragma: no cover - only one relevant feed today
+            text = json.dumps(data, indent=2) if isinstance(data, (dict, list)) \
+                else str(data)
+            print(text[:4000])
+        return EXIT_OK
+
+    return EXIT_USAGE
+
+
+# --------------------------------------------------------------------------
 # parser
 # --------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
@@ -223,6 +353,41 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("--fail-on-fail", action="store_true",
                          help="exit non-zero if the check fails")
     p_check.set_defaults(func=cmd_check)
+
+    # crosswalk
+    p_xw = sub.add_parser(
+        "crosswalk",
+        help="map each check to authoritative NIST 800-53 rev5 controls")
+    p_xw.add_argument("--profile", help="path to a custom profile JSON")
+    p_xw.add_argument("--json", action="store_true",
+                      help="emit machine-readable JSON")
+    p_xw.add_argument("--no-color", action="store_true",
+                      help="disable ANSI colour output")
+    p_xw.add_argument("--offline", action="store_true",
+                      help="resolve from the cached catalog only "
+                           "(air-gap mode; never touches the network)")
+    p_xw.add_argument("--fail-on-unmapped", action="store_true",
+                      help="exit non-zero if any tagged control is "
+                           "unresolved in the catalog")
+    p_xw.set_defaults(func=cmd_crosswalk)
+
+    # feeds
+    p_feeds = sub.add_parser(
+        "feeds",
+        help="manage the edge/air-gap data-feed cache cisbench consumes")
+    feeds_sub = p_feeds.add_subparsers(dest="feeds_action", required=True)
+    fl = feeds_sub.add_parser("list", help="list the feeds cisbench consumes")
+    fl.set_defaults(func=cmd_feeds)
+    fu = feeds_sub.add_parser("update",
+                              help="fetch + cache the relevant feed(s)")
+    fu.add_argument("ids", nargs="*",
+                    help="feed id(s) to update (default: all relevant)")
+    fu.set_defaults(func=cmd_feeds)
+    fg = feeds_sub.add_parser("get", help="show a cached feed summary")
+    fg.add_argument("id", help="feed id to retrieve")
+    fg.add_argument("--offline", action="store_true",
+                    help="serve from cache only (never touch the network)")
+    fg.set_defaults(func=cmd_feeds)
 
     return parser
 

@@ -30,5 +30,8 @@ cisbench = "cisbench.cli:main"
 [tool.setuptools]
 packages = ["cisbench"]
 
+[tool.setuptools.package-data]
+cisbench = ["data_feeds_2026.json"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,10 +5,12 @@ database hardening settings. It evaluates a set of declarative checks against a
 **provided inventory snapshot** (a settings JSON) and reports `PASS`/`FAIL` with
 evidence, a compliance score, and remediation guidance.
 
-cisbench is **offline only**. It never connects to a database. You give it a
-JSON snapshot of the configuration you want to audit, and it reasons purely over
-that file. This makes it safe to run anywhere — in CI, on an air-gapped review
-workstation, or against an exported configuration dump.
+cisbench **never connects to a database**. You give it a JSON snapshot of the
+configuration you want to audit, and it reasons purely over that file. This
+makes it safe to run anywhere — in CI, on an air-gapped review workstation, or
+against an exported configuration dump. The optional `crosswalk` enrichment can
+fetch the authoritative NIST 800-53 OSCAL catalog once, then run fully offline
+(or fully air-gapped via a snapshot); see [Data feeds](#data-feeds-edge--air-gap-ingestion).
 
 - Maintainer: **Cognis Digital**
 - License: **COCL 1.0**
@@ -105,6 +107,73 @@ publish to GitHub code scanning:
     sarif_file: cisbench.sarif
 ```
 
+### Crosswalk findings to NIST SP 800-53 rev5 (real control titles)
+
+Every baseline check is tagged with the NIST SP 800-53 rev5 controls it
+supports. `cisbench crosswalk` resolves those control ids against the
+**authoritative** NIST OSCAL machine-readable catalog and prints each control's
+official **title** and **family** — so a database finding is traceable to a
+federal control, with provenance:
+
+```bash
+cisbench crosswalk            # online: fetches + caches the catalog if needed
+cisbench crosswalk --offline  # air-gap: resolves from the cache only
+```
+
+```
+NIST SP 800-53 rev5 crosswalk — profile: cognis-db-baseline
+source: usnistgov/oscal-content (authoritative OSCAL catalog)
+========================================================================
+CDB-1.1    [critical] Transport encryption is required for client connections
+           -> SC-8       Transmission Confidentiality and Integrity  [System and Communications Protection]
+           -> SC-8(1)    Cryptographic Protection  [System and Communications Protection]
+...
+12/12 checks carry 800-53 mappings; 0 control id(s) unresolved.
+```
+
+Add `--json` for machine-readable output, or `--fail-on-unmapped` to gate a
+pipeline when a tagged control cannot be resolved in the catalog.
+
+### Data feeds (edge / air-gap ingestion)
+
+The crosswalk is powered by a bundled, **standard-library-only** data-feed
+layer (`cisbench/datafeeds.py`). It fetches authoritative feeds over HTTPS,
+caches them to disk, and re-serves them **offline** so the tool keeps working on
+a disconnected or air-gapped enclave. cisbench consumes exactly one feed from
+the shared catalog:
+
+| Feed id | Source | Used for |
+|---------|--------|----------|
+| `oscal-800-53-rev5-catalog` | [`usnistgov/oscal-content`](https://github.com/usnistgov/oscal-content) — `nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json` | resolving check tags to authoritative 800-53 rev5 control titles/families |
+
+```bash
+cisbench feeds list                                   # show the feed(s) + cache status
+cisbench feeds update                                 # fetch + cache (online, one-time)
+cisbench feeds get oscal-800-53-rev5-catalog --offline  # cached summary, no network
+```
+
+The cache location is `COGNIS_FEEDS_CACHE` (default `~/.cache/cognis-feeds`).
+
+#### Air-gap workflow (sneakernet)
+
+On a connected host, populate the cache and export a snapshot; carry it to the
+enclave and import it. Everything after that runs with `--offline`:
+
+```bash
+# connected host
+cisbench feeds update
+python -m cisbench.datafeeds snapshot-export oscal.tar.gz
+
+# air-gapped enclave (after transferring oscal.tar.gz)
+export COGNIS_FEEDS_CACHE=/opt/cognis-feeds
+python -m cisbench.datafeeds snapshot-import oscal.tar.gz
+cisbench crosswalk --offline
+```
+
+The bundled tests run **fully offline** against a small trimmed OSCAL fixture
+committed under [`tests/fixtures/feeds-cache`](tests/fixtures/feeds-cache/);
+they never touch the network.
+
 ### List the checks in a profile
 
 ```bash
@@ -156,6 +225,7 @@ from, what to expect, the exact command to run, and how to act on the result.
 | [`06-sarif-code-scanning`](demos/06-sarif-code-scanning/) | Emitting SARIF 2.1.0 and uploading to a code-scanning dashboard. |
 | [`07-legacy-onprem-remediation`](demos/07-legacy-onprem-remediation/) | Driving a remediation project with before/after snapshots (8.3% → 75.0%). |
 | [`08-airgapped-review`](demos/08-airgapped-review/) | An offline audit of an incomplete export, showing the conservative "missing → FAIL" behaviour. |
+| [`09-nist-800-53-crosswalk`](demos/09-nist-800-53-crosswalk/) | Crosswalking the baseline to authoritative NIST 800-53 rev5 control titles/families, fully offline. |
 
 Try one:
 
@@ -180,7 +250,8 @@ A profile is plain JSON. Each check uses one of the supported operators below.
       "operator": "is_true",
       "reference": "MIN-NET-1",
       "severity": "critical",
-      "remediation": "Enable mandatory TLS at the listener."
+      "remediation": "Enable mandatory TLS at the listener.",
+      "nist_controls": ["sc-8", "sc-8.1"]
     }
   ]
 }
@@ -196,6 +267,10 @@ A profile is plain JSON. Each check uses one of the supported operators below.
 | `contains` / `not_contains` | `expected` is / is not in the value (list or string) |
 | `is_true` / `is_false` | value is truthy / falsy (`expected` ignored) |
 | `present` / `absent` | the setting key exists / does not exist |
+
+The optional `nist_controls` field on a check is a list of NIST 800-53 rev5
+control ids (OSCAL form, e.g. `"sc-8"`, `"ia-5.1"`) that `cisbench crosswalk`
+resolves to authoritative titles.
 
 ### Severities
 
@@ -227,5 +302,8 @@ PYTHONUTF8=1 python -m pytest
 ## Scope
 
 cisbench is a **defensive, analytical** tool. It reads configuration snapshots
-and reports on hardening posture. It performs no exploitation, no network
-activity, and no changes to any system.
+and reports on hardening posture. It performs no exploitation and makes no
+changes to any system. The only network activity is the optional, opt-in fetch
+of the authoritative NIST OSCAL catalog for `crosswalk`/`feeds update`; that
+catalog is cached and can be served entirely offline (and air-gapped via
+snapshot), so scanning never requires network access.

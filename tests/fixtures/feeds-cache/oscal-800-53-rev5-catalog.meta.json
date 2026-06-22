@@ -1,0 +1,8 @@
+{
+ "feed": "oscal-800-53-rev5-catalog",
+ "url": "https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json",
+ "fetched_at": 1782131727.4493375,
+ "bytes": 0,
+ "format": "oscal",
+ "note": "TRIMMED test fixture: only the families/controls cisbench references. Not the full catalog."
+}

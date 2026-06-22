@@ -66,6 +66,7 @@ class Check:
     severity: str = DEFAULT_SEVERITY
     remediation: str = ""
     description: str = ""
+    nist_controls: list[str] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if not self.id:
@@ -93,7 +94,7 @@ class Check:
     def from_dict(cls, data: dict[str, Any]) -> "Check":
         known = {
             "id", "title", "path", "operator", "expected", "reference",
-            "severity", "remediation", "description",
+            "severity", "remediation", "description", "nist_controls",
         }
         unknown = set(data) - known
         if unknown:
@@ -111,6 +112,7 @@ class Check:
             severity=data.get("severity", DEFAULT_SEVERITY),
             remediation=data.get("remediation", ""),
             description=data.get("description", ""),
+            nist_controls=list(data.get("nist_controls", []) or []),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -124,6 +126,7 @@ class Check:
             "severity": self.severity,
             "remediation": self.remediation,
             "description": self.description,
+            "nist_controls": list(self.nist_controls),
         }
 
     @property
