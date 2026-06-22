@@ -1,0 +1,29 @@
+{
+  "_comment": "A legacy on-prem database that predates the current hardening standard. Captured offline at the start of a remediation project. Several controls fail; the team will work through them in priority order.",
+  "settings": {
+    "network": {
+      "require_tls": false,
+      "min_tls_version": 1.0,
+      "bind_address": "0.0.0.0"
+    },
+    "auth": {
+      "password_min_length": 8,
+      "password_complexity_enabled": false,
+      "failed_login_lockout_threshold": 50,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": false,
+      "retention_days": 14
+    },
+    "accounts": {
+      "default_admin_renamed": false
+    },
+    "storage": {
+      "encryption_at_rest": false
+    },
+    "diagnostics": {
+      "verbose_client_errors": true
+    }
+  }
+}

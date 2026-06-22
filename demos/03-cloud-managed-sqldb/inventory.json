@@ -1,0 +1,32 @@
+{
+  "_comment": "Configuration export for a managed cloud SQL database (PaaS). The platform handles transport and at-rest encryption by default, but customer-owned policy controls (password rules, audit retention, account hygiene) are configured by the tenant and reviewed here.",
+  "snapshot_taken": "2026-06-18",
+  "environment": "production",
+  "platform": "managed-paas-sql",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.2,
+      "bind_address": "private-endpoint"
+    },
+    "auth": {
+      "password_min_length": 16,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 5,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 45
+    },
+    "accounts": {
+      "default_admin_renamed": false
+    },
+    "storage": {
+      "encryption_at_rest": true
+    },
+    "diagnostics": {
+      "verbose_client_errors": false
+    }
+  }
+}

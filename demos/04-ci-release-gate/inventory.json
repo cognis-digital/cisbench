@@ -1,0 +1,29 @@
+{
+  "_comment": "Inventory rendered from the database role of an infrastructure-as-code plan during a release pipeline. The pipeline runs cisbench as a gate before promoting the change to production.",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.3,
+      "bind_address": "10.30.2.40"
+    },
+    "auth": {
+      "password_min_length": 14,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 5,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 180
+    },
+    "accounts": {
+      "default_admin_renamed": true
+    },
+    "storage": {
+      "encryption_at_rest": false
+    },
+    "diagnostics": {
+      "verbose_client_errors": false
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "_comment": "The same legacy database after phase 1 of remediation: transport security and the most exposed network/audit controls have been fixed. A few lower-priority controls are still outstanding, scheduled for phase 2.",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.2,
+      "bind_address": "10.50.3.7"
+    },
+    "auth": {
+      "password_min_length": 14,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 10,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 90
+    },
+    "accounts": {
+      "default_admin_renamed": false
+    },
+    "storage": {
+      "encryption_at_rest": false
+    },
+    "diagnostics": {
+      "verbose_client_errors": true
+    }
+  }
+}

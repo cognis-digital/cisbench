@@ -1,0 +1,29 @@
+{
+  "_comment": "An offline database snapshot scanned in CI so that cisbench findings are uploaded to a code-scanning dashboard as SARIF. The configuration has a few representative gaps spanning critical, high, and medium severities.",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.2,
+      "bind_address": "0.0.0.0"
+    },
+    "auth": {
+      "password_min_length": 12,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 8,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 120
+    },
+    "accounts": {
+      "default_admin_renamed": true
+    },
+    "storage": {
+      "encryption_at_rest": true
+    },
+    "diagnostics": {
+      "verbose_client_errors": false
+    }
+  }
+}

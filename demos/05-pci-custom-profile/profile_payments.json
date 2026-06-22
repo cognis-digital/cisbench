@@ -1,0 +1,83 @@
+{
+  "name": "cognis-payments-db",
+  "version": "1.0",
+  "description": "A stricter custom profile for databases that store cardholder-adjacent data in a regulated payments environment. All control identifiers (PAY-*) and wording are authored for cisbench and are not copied from any external standard; they merely express the intent commonly required of such systems.",
+  "checks": [
+    {
+      "id": "PAY-1",
+      "title": "Transport encryption is mandatory",
+      "path": "network.require_tls",
+      "operator": "is_true",
+      "reference": "PAY-NET-1",
+      "severity": "critical",
+      "remediation": "Require TLS for every client connection; reject plaintext at the listener."
+    },
+    {
+      "id": "PAY-2",
+      "title": "Minimum TLS version is 1.2 or higher",
+      "path": "network.min_tls_version",
+      "operator": "gte",
+      "expected": 1.2,
+      "reference": "PAY-NET-2",
+      "severity": "high",
+      "remediation": "Disable TLS 1.0/1.1 and SSL; negotiate only TLS 1.2+."
+    },
+    {
+      "id": "PAY-3",
+      "title": "Password minimum length is at least 16",
+      "path": "auth.password_min_length",
+      "operator": "gte",
+      "expected": 16,
+      "reference": "PAY-AUTH-1",
+      "severity": "high",
+      "remediation": "Raise the password policy minimum to 16 characters for payments-scope accounts."
+    },
+    {
+      "id": "PAY-4",
+      "title": "Failed-login lockout threshold is 5 or fewer",
+      "path": "auth.failed_login_lockout_threshold",
+      "operator": "lte",
+      "expected": 5,
+      "reference": "PAY-AUTH-2",
+      "severity": "medium",
+      "remediation": "Lock accounts after no more than 5 consecutive failed attempts."
+    },
+    {
+      "id": "PAY-5",
+      "title": "Anonymous login is disabled",
+      "path": "auth.anonymous_login_enabled",
+      "operator": "is_false",
+      "reference": "PAY-ACC-1",
+      "severity": "critical",
+      "remediation": "Disable anonymous and guest access entirely."
+    },
+    {
+      "id": "PAY-6",
+      "title": "Audit logging is enabled",
+      "path": "audit.logging_enabled",
+      "operator": "is_true",
+      "reference": "PAY-AUD-1",
+      "severity": "high",
+      "remediation": "Enable audit logging for privileged and authentication events."
+    },
+    {
+      "id": "PAY-7",
+      "title": "Audit log retention is at least 365 days",
+      "path": "audit.retention_days",
+      "operator": "gte",
+      "expected": 365,
+      "reference": "PAY-AUD-2",
+      "severity": "high",
+      "remediation": "Retain audit records for at least one year for payments-scope systems."
+    },
+    {
+      "id": "PAY-8",
+      "title": "Data-at-rest encryption is enabled",
+      "path": "storage.encryption_at_rest",
+      "operator": "is_true",
+      "reference": "PAY-DAT-1",
+      "severity": "critical",
+      "remediation": "Enable transparent data-at-rest encryption for data files and backups."
+    }
+  ]
+}

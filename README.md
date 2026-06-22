@@ -74,6 +74,37 @@ Add `--json` for machine-readable output:
 cisbench scan examples/inventory.json --json
 ```
 
+### Export findings as SARIF 2.1.0
+
+cisbench can emit a [SARIF 2.1.0](https://sarifweb.azurewebsites.net/) log so
+its findings drop straight into a code-scanning dashboard (GitHub code
+scanning, Azure DevOps, or any SARIF-aware aggregator) alongside your other
+security results:
+
+```bash
+cisbench scan examples/inventory.json --sarif > cisbench.sarif
+```
+
+Every check in the scanned profile is registered as a reusable SARIF `rule`
+(carrying its control reference and remediation as help text), and each
+**failing** check becomes a `result` with:
+
+- the rule id,
+- a SARIF `level` (`error` for critical/high, `warning` for medium, `note` for
+  low) plus a GitHub `security-severity` score,
+- a logical location naming the exact inventory setting path, and
+- the evidence and remediation in the message.
+
+The output is deterministic (no timestamps), so it is safe to diff in CI. To
+publish to GitHub code scanning:
+
+```yaml
+- run: cisbench scan inventory.json --sarif > cisbench.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: cisbench.sarif
+```
+
 ### List the checks in a profile
 
 ```bash
@@ -107,6 +138,30 @@ Exit codes:
 | `0`  | success / all gates satisfied |
 | `1`  | a CI gate failed (`--fail-on` / `--fail-on-any`) |
 | `2`  | usage or input error (missing file, unknown check id) |
+
+## Demos
+
+The [`demos/`](demos/) directory contains worked, real-use-case scenarios. Each
+demo is a self-contained folder with a realistic inventory snapshot (and, where
+relevant, a custom profile) plus a `SCENARIO.md` explaining where the data came
+from, what to expect, the exact command to run, and how to act on the result.
+
+| Demo | Scenario |
+|------|----------|
+| [`01-postgres-prod-audit`](demos/01-postgres-prod-audit/) | Quarterly hardening review of a production PostgreSQL primary (3 findings). |
+| [`02-mysql-dev-exposed`](demos/02-mysql-dev-exposed/) | An exposed, unhardened MySQL dev box found in a network sweep (0/12) — used as a hard CI gate. |
+| [`03-cloud-managed-sqldb`](demos/03-cloud-managed-sqldb/) | A managed PaaS database: shared-responsibility review where only tenant-owned controls fail. |
+| [`04-ci-release-gate`](demos/04-ci-release-gate/) | A release pipeline catching an IaC regression with `--fail-on`. |
+| [`05-pci-custom-profile`](demos/05-pci-custom-profile/) | The same DB scored against the baseline (100%) vs. a stricter custom payments profile (75%). |
+| [`06-sarif-code-scanning`](demos/06-sarif-code-scanning/) | Emitting SARIF 2.1.0 and uploading to a code-scanning dashboard. |
+| [`07-legacy-onprem-remediation`](demos/07-legacy-onprem-remediation/) | Driving a remediation project with before/after snapshots (8.3% → 75.0%). |
+| [`08-airgapped-review`](demos/08-airgapped-review/) | An offline audit of an incomplete export, showing the conservative "missing → FAIL" behaviour. |
+
+Try one:
+
+```bash
+cisbench scan demos/01-postgres-prod-audit/inventory.json
+```
 
 ## Authoring a custom profile
 

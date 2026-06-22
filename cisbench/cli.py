@@ -27,6 +27,7 @@ from .profile import (
     load_inventory,
     scan,
 )
+from .sarif import to_sarif
 
 EXIT_OK = 0
 EXIT_GATE_FAILED = 1
@@ -57,7 +58,9 @@ def cmd_scan(args: argparse.Namespace) -> int:
     inventory = load_inventory(args.inventory)
     report = scan(profile, inventory)
 
-    if args.json:
+    if getattr(args, "sarif", False):
+        print(json.dumps(to_sarif(report), indent=2))
+    elif args.json:
         print(json.dumps(report.to_dict(), indent=2))
     else:
         _print_scan_table(report, color=_use_color(args))
@@ -187,6 +190,9 @@ def build_parser() -> argparse.ArgumentParser:
                                           "(defaults to built-in baseline)")
     p_scan.add_argument("--json", action="store_true",
                         help="emit machine-readable JSON instead of a table")
+    p_scan.add_argument("--sarif", action="store_true",
+                        help="emit a SARIF 2.1.0 log of failing checks "
+                             "(for GitHub code scanning and SAST dashboards)")
     p_scan.add_argument("--no-color", action="store_true",
                         help="disable ANSI colour output")
     p_scan.add_argument("--fail-on", type=float, metavar="SCORE",

@@ -1,0 +1,29 @@
+{
+  "_comment": "Exported configuration snapshot of a production PostgreSQL 16 primary. Captured offline by the DBA team for a quarterly hardening review. No live connection was used; this is a hand-curated settings dump mapped onto the cisbench inventory schema.",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.1,
+      "bind_address": "10.20.0.15"
+    },
+    "auth": {
+      "password_min_length": 10,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 6,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 30
+    },
+    "accounts": {
+      "default_admin_renamed": true
+    },
+    "storage": {
+      "encryption_at_rest": true
+    },
+    "diagnostics": {
+      "verbose_client_errors": false
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "_comment": "A configuration dump handed to an auditor on removable media for review on an air-gapped workstation. The export was incomplete: the storage and diagnostics sections were never captured, so those settings are simply absent from the snapshot.",
+  "settings": {
+    "network": {
+      "require_tls": true,
+      "min_tls_version": 1.2,
+      "bind_address": "192.168.50.10"
+    },
+    "auth": {
+      "password_min_length": 16,
+      "password_complexity_enabled": true,
+      "failed_login_lockout_threshold": 5,
+      "anonymous_login_enabled": false
+    },
+    "audit": {
+      "logging_enabled": true,
+      "retention_days": 365
+    },
+    "accounts": {
+      "default_admin_renamed": true
+    }
+  }
+}
