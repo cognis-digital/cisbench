@@ -1,11 +1,13 @@
 """Command-line interface for cisbench.
 
 Subcommands:
-    scan       evaluate a profile against an inventory and report results
-    list       print the catalog of checks in a profile
-    check      evaluate a single check by id against an inventory
-    crosswalk  map each check to authoritative NIST 800-53 rev5 controls
-    feeds      manage the edge/air-gap data-feed cache (list/update/get)
+    scan         evaluate a profile against an inventory and report results
+    list         print the catalog of checks in a profile
+    check        evaluate a single check by id against an inventory
+    crosswalk    map each check to authoritative NIST 800-53 rev5 controls
+    feeds        manage the edge/air-gap data-feed cache (list/update/get)
+    active-scan  OPTIONAL, authorization-gated read-only probe of an
+                 allowlisted host (off by default; passive scan is the default)
 
 Exit codes:
     0   success / all gates satisfied
@@ -21,6 +23,14 @@ import sys
 from typing import Any
 
 from . import __version__, datafeeds
+from .active import (
+    ActiveError,
+    ActiveScanner,
+    Allowlist,
+    RateLimiter,
+    merge_evidence,
+    parse_target,
+)
 from .crosswalk import FEED_ID, build_index, enrich_profile, load_catalog
 from .engine import evaluate_check
 from .profile import (
@@ -299,6 +309,92 @@ def cmd_feeds(args: argparse.Namespace) -> int:
 
 
 # --------------------------------------------------------------------------
+# active-scan  (OPTIONAL, authorization-gated, read-only probe)
+# --------------------------------------------------------------------------
+def cmd_active_scan(args: argparse.Namespace) -> int:
+    """Read-only probe of an allowlisted host, then score it passively.
+
+    Off by default at every layer: requires --authorized AND an explicit
+    target allowlist; paces probes with a rate limiter; probes are read-only
+    (TCP connect + banner only). The probe evidence is merged into a base
+    inventory and scored by the ordinary passive engine.
+    """
+    # Build the allowlist from --allow and/or --allow-file.
+    entries: list[str] = list(args.allow or [])
+    try:
+        if args.allow_file:
+            file_allow = Allowlist.from_file(args.allow_file)
+            entries.extend(file_allow.entries)
+        allowlist = Allowlist.from_iterable(entries)
+    except ActiveError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+    if not args.authorized:
+        print("refused: active probing is OFF by default. Re-run with "
+              "--authorized and an explicit --allow/--allow-file target "
+              "allowlist for hosts you are authorized to assess.",
+              file=sys.stderr)
+        return EXIT_USAGE
+    if len(allowlist) == 0:
+        print("refused: --authorized requires a non-empty target allowlist "
+              "(use --allow HOST or --allow-file FILE).", file=sys.stderr)
+        return EXIT_USAGE
+
+    try:
+        targets = [parse_target(t, default_port=args.port) for t in args.targets]
+    except ActiveError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+    scanner = ActiveScanner(
+        authorized=True,
+        allowlist=allowlist,
+        limiter=RateLimiter(rate=args.rate, capacity=args.rate),
+        timeout=args.timeout,
+    )
+
+    try:
+        results = scanner.probe_all(targets)
+    except ActiveError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+
+    base: dict[str, Any] = {}
+    if args.from_inventory:
+        base = load_inventory(args.from_inventory)
+    inventory = merge_evidence(base, results)
+
+    if args.emit_inventory:
+        print(json.dumps(inventory, indent=2))
+        return EXIT_OK
+
+    profile = _load_profile(args)
+    report = scan(profile, inventory)
+    if getattr(args, "sarif", False):
+        print(json.dumps(to_sarif(report), indent=2))
+    elif args.json:
+        out = report.to_dict()
+        out["active_probes"] = [r.to_dict() for r in results]
+        print(json.dumps(out, indent=2))
+    else:
+        color = _use_color(args)
+        print()
+        print(_color("cisbench active-scan (read-only, authorized) — "
+                     f"{len(results)} target(s) probed", _BOLD, color))
+        for r in results:
+            state = "reachable" if r.reachable else "unreachable"
+            line = f"  {r.target.host}:{r.target.port}  {state}"
+            if r.banner:
+                line += f"  banner={r.banner!r}"
+            if r.error:
+                line += f"  error={r.error}"
+            print(line)
+        _print_scan_table(report, color=color)
+    return _apply_gate(args, report)
+
+
+# --------------------------------------------------------------------------
 # parser
 # --------------------------------------------------------------------------
 def build_parser() -> argparse.ArgumentParser:
@@ -389,6 +485,50 @@ def build_parser() -> argparse.ArgumentParser:
                     help="serve from cache only (never touch the network)")
     fg.set_defaults(func=cmd_feeds)
 
+    # active-scan (OPTIONAL, authorization-gated, read-only)
+    p_act = sub.add_parser(
+        "active-scan",
+        help="OPTIONAL authorization-gated read-only probe of an allowlisted "
+             "host (OFF by default; the passive 'scan' is the default mode)",
+        description="Read-only active probe. OFF by default: requires "
+                    "--authorized AND an explicit target allowlist. Probes are "
+                    "read-only (TCP connect + banner); no auth, no payloads, no "
+                    "writes. Evidence is merged into an inventory and scored by "
+                    "the same passive engine.")
+    p_act.add_argument("targets", nargs="+",
+                       help="host[:port] target(s) to probe (must be allowlisted)")
+    p_act.add_argument("--authorized", action="store_true",
+                       help="REQUIRED to enable active probing; asserts you are "
+                            "authorized to assess the allowlisted targets")
+    p_act.add_argument("--allow", action="append", metavar="HOST",
+                       help="add a host to the authorization allowlist "
+                            "(repeatable)")
+    p_act.add_argument("--allow-file", metavar="FILE",
+                       help="file of allowlisted hosts (one per line, # comments)")
+    p_act.add_argument("--port", type=int, default=5432,
+                       help="default port when a target omits one (default 5432)")
+    p_act.add_argument("--rate", type=float, default=2.0,
+                       help="max probe attempts per second (rate limiter; "
+                            "default 2.0)")
+    p_act.add_argument("--timeout", type=float, default=3.0,
+                       help="per-probe TCP timeout in seconds (default 3.0)")
+    p_act.add_argument("--from", dest="from_inventory", metavar="INVENTORY",
+                       help="base inventory JSON to merge probe evidence into")
+    p_act.add_argument("--emit-inventory", action="store_true",
+                       help="print the merged inventory and exit (do not score)")
+    p_act.add_argument("--profile", help="path to a custom profile JSON")
+    p_act.add_argument("--json", action="store_true",
+                       help="emit machine-readable JSON")
+    p_act.add_argument("--sarif", action="store_true",
+                       help="emit a SARIF 2.1.0 log of failing checks")
+    p_act.add_argument("--no-color", action="store_true",
+                       help="disable ANSI colour output")
+    p_act.add_argument("--fail-on", type=float, metavar="SCORE",
+                       help="exit non-zero if the score is below SCORE")
+    p_act.add_argument("--fail-on-any", action="store_true",
+                       help="exit non-zero if any check fails")
+    p_act.set_defaults(func=cmd_active_scan)
+
     return parser
 
 
@@ -399,6 +539,9 @@ def main(argv: list[str] | None = None) -> int:
         return args.func(args)
     except ProfileError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return EXIT_USAGE
+    except ActiveError as exc:
+        print(f"refused: {exc}", file=sys.stderr)
         return EXIT_USAGE
 
 

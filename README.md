@@ -1,9 +1,35 @@
 # cisbench
 
+[![CI](https://github.com/cognis-digital/cisbench/actions/workflows/ci.yml/badge.svg)](https://github.com/cognis-digital/cisbench/actions/workflows/ci.yml)
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![stdlib only](https://img.shields.io/badge/runtime%20deps-none-success)
+![License: COCL 1.0](https://img.shields.io/badge/license-COCL%201.0-lightgrey)
+![Passive by default](https://img.shields.io/badge/scan-passive%20by%20default-success)
+![SARIF 2.1.0](https://img.shields.io/badge/output-SARIF%202.1.0-orange)
+![NIST 800-53 rev5](https://img.shields.io/badge/crosswalk-NIST%20800--53%20rev5-informational)
+
 **cisbench** is an offline, CIS-benchmark-style configuration checker for
 database hardening settings. It evaluates a set of declarative checks against a
 **provided inventory snapshot** (a settings JSON) and reports `PASS`/`FAIL` with
 evidence, a compliance score, and remediation guidance.
+
+At a glance:
+
+- **Passive & offline by default** — scores a configuration snapshot you
+  provide; the default path never opens a socket.
+- **Real, traceable enrichment** — crosswalks every finding to the
+  **authoritative** NIST SP 800-53 rev5 OSCAL catalog (official control titles
+  and families), fetched once and then served fully offline / air-gapped.
+- **Dashboard-ready output** — emits **SARIF 2.1.0** for GitHub code scanning
+  and SAST aggregators, plus plain JSON.
+- **Edge / air-gap data feeds** — a stdlib-only feed ingester
+  (`cisbench/datafeeds.py`) caches authoritative feeds and re-serves them on a
+  disconnected enclave via a sneakernet snapshot.
+- **Optional, tightly-gated active mode** — an authorization-gated, rate-limited,
+  **read-only** probe of an explicit target allowlist (off by default; see
+  [Active mode](#active-mode-optional-authorization-gated-read-only)).
+- **Four implementations** — a Python reference plus Go, Rust, and
+  TypeScript/Node ports of the core scan surface (see [Language ports](#language-ports)).
 
 cisbench **never connects to a database**. You give it a JSON snapshot of the
 configuration you want to audit, and it reasons purely over that file. This
@@ -26,11 +52,23 @@ to hand out database credentials, and the audit is fully reproducible.
 
 ## Install
 
+From a clone (recommended for the full repo, demos, and ports):
+
 ```bash
+git clone https://github.com/cognis-digital/cisbench
+cd cisbench
 pip install -e .
 ```
 
-This installs the `cisbench` console command.
+Or install the package directly with pip:
+
+```bash
+pip install cognis-cisbench
+```
+
+This installs the `cisbench` console command. There are **no third-party
+runtime dependencies** — cisbench is standard-library only, so it drops into a
+minimal or air-gapped environment cleanly.
 
 ## Concepts
 
@@ -139,12 +177,23 @@ pipeline when a tagged control cannot be resolved in the catalog.
 The crosswalk is powered by a bundled, **standard-library-only** data-feed
 layer (`cisbench/datafeeds.py`). It fetches authoritative feeds over HTTPS,
 caches them to disk, and re-serves them **offline** so the tool keeps working on
-a disconnected or air-gapped enclave. cisbench consumes exactly one feed from
-the shared catalog:
+a disconnected or air-gapped enclave. The bundled catalog
+(`cisbench/data_feeds_2026.json`) is the shared Cognis edge-feed catalog (35
+real, mostly-keyless feeds across vuln, threat-intel, compliance, cloud and
+OSINT domains — e.g. CISA KEV, EPSS, OSV, NVD, MITRE ATT&CK STIX, NIST OSCAL).
+For its own operation, **cisbench consumes exactly one feed** and the
+`cisbench feeds` command intentionally exposes only that one:
 
 | Feed id | Source | Used for |
 |---------|--------|----------|
 | `oscal-800-53-rev5-catalog` | [`usnistgov/oscal-content`](https://github.com/usnistgov/oscal-content) — `nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json` | resolving check tags to authoritative 800-53 rev5 control titles/families |
+
+The wider catalog is available to the underlying ingester (`python -m
+cisbench.datafeeds list`) for operators who want to enrich an air-gapped
+toolchain — including bulk CVE harvest (`python -m cisbench.datafeeds bulk
+nvd-cve`) that paginates a CVE source to the edge cache without bundling
+gigabytes into git. All feeds are keyless/offline-capable and carry their own
+licensing/attribution; no fabricated intelligence is shipped.
 
 ```bash
 cisbench feeds list                                   # show the feed(s) + cache status
@@ -207,6 +256,76 @@ Exit codes:
 | `0`  | success / all gates satisfied |
 | `1`  | a CI gate failed (`--fail-on` / `--fail-on-any`) |
 | `2`  | usage or input error (missing file, unknown check id) |
+
+## Active mode (optional, authorization-gated, read-only)
+
+cisbench is **passive and offline by default** — nothing in the default path
+touches a live system. For operators who need to gather configuration evidence
+from a host they are **explicitly authorized to assess**, there is an optional
+`active-scan` subcommand. It is locked down behind **four independent
+guardrails, all of which must be satisfied**:
+
+1. **Authorization flag** — nothing runs without `--authorized`. Off by default.
+2. **Target allowlist** — every target must be named explicitly via `--allow`
+   (repeatable) or `--allow-file`. A host that is not on the allowlist is
+   refused before any socket is opened.
+3. **Rate limiter** — a token bucket (`--rate`, default 2/s) paces probes so the
+   tool cannot be turned into a sweeper.
+4. **Read-only probes only** — the built-in probe is a TCP connect + banner
+   read. It sends **nothing**: no authentication, no exploit payloads, no
+   state-changing traffic. It cannot log in, cannot bypass auth, and cannot
+   modify the target.
+
+The probe yields *evidence* (reachability/banner), which is merged into an
+inventory snapshot and then scored by the **same passive engine** — so active
+and passive runs are scored identically.
+
+```bash
+# Off by default — this is refused (exit 2):
+cisbench active-scan db.internal:5432 --allow db.internal
+
+# Authorized + allowlisted + paced + read-only:
+cisbench active-scan db.internal:5432 \
+    --authorized --allow db.internal --rate 1 \
+    --from exported_settings.json
+```
+
+```
+cisbench active-scan (read-only, authorized) — 1 target(s) probed
+  db.internal:5432  reachable  banner='...'
+... (passive scan table over the merged inventory) ...
+```
+
+Use `--emit-inventory` to capture the merged evidence as JSON without scoring,
+or `--from BASE.json` to layer probe evidence on top of an exported config.
+**This mode is for authorized, defensive assessment only.** cisbench performs
+no exploitation and makes no changes to any system.
+
+## Language ports
+
+The core passive scan surface is available in four implementations, all sharing
+an identical scoring contract (the same inventory yields the same score in each):
+
+| Port | Path | Commands | Test |
+|------|------|----------|------|
+| **Python** (reference) | [`cisbench/`](cisbench/) | `scan` `list` `check` `crosswalk` `feeds` `active-scan` | `python -m pytest` |
+| **Go** | [`ports/go/`](ports/go/) | `scan` `list` | `go test ./...` |
+| **Rust** | [`ports/rust/`](ports/rust/) | `scan` `list` | `cargo test` |
+| **TypeScript / Node** | [`ports/node/`](ports/node/) | `scan` `list` | `npm test` |
+
+```bash
+# Go
+cd ports/go && go run ./cmd/cisbench scan ../../examples/inventory_hardened.json
+# Rust
+cd ports/rust && cargo run -- scan ../../examples/inventory_hardened.json
+# Node (TypeScript, native type-stripping; Node >= 22)
+cd ports/node && node --experimental-strip-types src/cli.ts scan ../../examples/inventory_hardened.json
+```
+
+Every port is built and tested in CI on push, so they are real and verifiable —
+see [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and
+[`ports/README.md`](ports/README.md). The ports implement the passive surface
+only; the authorization-gated active probe lives in the Python reference.
 
 ## Demos
 
@@ -299,11 +418,26 @@ On Windows, set `PYTHONUTF8=1` for the tests:
 PYTHONUTF8=1 python -m pytest
 ```
 
-## Scope
+## Scope, authorization & safety
 
 cisbench is a **defensive, analytical** tool. It reads configuration snapshots
-and reports on hardening posture. It performs no exploitation and makes no
-changes to any system. The only network activity is the optional, opt-in fetch
-of the authoritative NIST OSCAL catalog for `crosswalk`/`feeds update`; that
-catalog is cached and can be served entirely offline (and air-gapped via
-snapshot), so scanning never requires network access.
+and reports on hardening posture. It performs **no exploitation** and makes
+**no changes** to any system.
+
+- **Passive scanning is the default and is fully offline.** The `scan`, `list`,
+  `check`, and (with a populated cache) `crosswalk` commands open no network
+  sockets.
+- **The only default network activity** is the optional, opt-in fetch of the
+  authoritative NIST OSCAL catalog for `crosswalk` / `feeds update`; that
+  catalog is cached and can be served entirely offline (and air-gapped via
+  snapshot), so scanning never requires network access.
+- **Active probing is OFF by default** and, when enabled, is hemmed in by four
+  independent guardrails — `--authorized`, an explicit target allowlist, a rate
+  limiter, and read-only-only probes (no auth, no payloads, no writes). See
+  [Active mode](#active-mode-optional-authorization-gated-read-only). Only probe
+  systems you are explicitly authorized to assess.
+- **No fabricated data.** All control titles come from the authoritative NIST
+  OSCAL catalog; the bundled feed catalog references only real, attributable
+  sources. cisbench never invents CVEs, fingerprints, or intelligence.
+
+License: **COCL 1.0** (see [`LICENSE`](LICENSE) / [`NOTICE`](NOTICE)).

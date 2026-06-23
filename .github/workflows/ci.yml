@@ -7,6 +7,7 @@ on:
 
 jobs:
   test:
+    name: Python (reference)
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -33,3 +34,71 @@ jobs:
           cisbench list
           cisbench scan examples/inventory.json
           cisbench scan examples/inventory_hardened.json --fail-on-any
+
+      - name: Active-scan is OFF by default (must refuse)
+        run: |
+          set +e
+          cisbench active-scan 127.0.0.1:5432 --allow 127.0.0.1
+          rc=$?
+          set -e
+          test "$rc" -eq 2  # refusal exit code
+
+  go:
+    name: Go port
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ports/go
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test ./... -v
+      - name: Smoke-test scan on the hardened example
+        run: |
+          go run ./cmd/cisbench scan ../../examples/inventory_hardened.json | tee out.txt
+          grep -q "score 100.0%" out.txt
+
+  rust:
+    name: Rust port
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ports/rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        run: cargo build --verbose
+      - name: Test
+        run: cargo test --verbose
+      - name: Smoke-test scan on the hardened example
+        run: |
+          cargo run --quiet -- scan ../../examples/inventory_hardened.json | tee out.txt
+          grep -q "score 100.0%" out.txt
+
+  node:
+    name: Node / TypeScript port
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ports/node
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Type-check
+        run: |
+          npm install
+          npx tsc --noEmit
+      - name: Test
+        run: npm test
+      - name: Smoke-test scan on the hardened example
+        run: |
+          node --experimental-strip-types src/cli.ts scan ../../examples/inventory_hardened.json | tee out.txt
+          grep -q "score 100.0%" out.txt

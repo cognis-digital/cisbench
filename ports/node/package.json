@@ -1,0 +1,23 @@
+{
+  "name": "@cognis-digital/cisbench",
+  "version": "0.1.0",
+  "description": "TypeScript/Node port of the cisbench passive DB-hardening checker.",
+  "type": "module",
+  "bin": {
+    "cisbench": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "node --experimental-strip-types --test \"test/**/*.test.ts\"",
+    "scan": "node --experimental-strip-types src/cli.ts scan",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "LicenseRef-COCL-1.0",
+  "author": "Cognis Digital",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^22.0.0"
+  }
+}

@@ -30,3 +30,12 @@ ENV/
 *.swp
 .DS_Store
 Thumbs.db
+
+# Language ports — build artifacts
+ports/node/node_modules/
+ports/node/package-lock.json
+ports/rust/target/
+ports/rust/Cargo.lock
+ports/go/cisbench
+ports/go/out.txt
+ports/**/out.txt

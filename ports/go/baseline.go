@@ -1,0 +1,63 @@
+package cisbench
+
+// BuiltinProfile returns the cognis-db-baseline profile. The CDB-* identifiers
+// and wording mirror the authored Python baseline (defaults.py); they are not
+// copied from any external benchmark document.
+func BuiltinProfile() Profile {
+	return Profile{
+		Name:    "cognis-db-baseline",
+		Version: "1.0",
+		Description: "Cognis Database Baseline: a vendor-neutral set of " +
+			"offline configuration-hardening checks for relational databases.",
+		Checks: []Check{
+			{ID: "CDB-1.1", Title: "Transport encryption is required for client connections",
+				Path: "network.require_tls", Operator: "is_true",
+				Reference: "CDB-NET-1", Severity: "critical",
+				Remediation: "Enable mandatory TLS for all client connections."},
+			{ID: "CDB-1.2", Title: "Minimum TLS protocol version is 1.2 or higher",
+				Path: "network.min_tls_version", Operator: "gte", Expected: 1.2,
+				Reference: "CDB-NET-2", Severity: "high",
+				Remediation: "Negotiate only TLS 1.2 or newer."},
+			{ID: "CDB-2.1", Title: "Password minimum length meets baseline",
+				Path: "auth.password_min_length", Operator: "gte", Expected: 14,
+				Reference: "CDB-AUTH-1", Severity: "high",
+				Remediation: "Set the password minimum length to at least 14."},
+			{ID: "CDB-2.2", Title: "Password complexity enforcement is enabled",
+				Path: "auth.password_complexity_enabled", Operator: "is_true",
+				Reference: "CDB-AUTH-2", Severity: "medium",
+				Remediation: "Enable password complexity enforcement."},
+			{ID: "CDB-2.3", Title: "Failed-login lockout threshold is configured",
+				Path: "auth.failed_login_lockout_threshold", Operator: "lte", Expected: 10,
+				Reference: "CDB-AUTH-3", Severity: "medium",
+				Remediation: "Set the failed-login lockout threshold to 10 or fewer."},
+			{ID: "CDB-3.1", Title: "Audit logging is enabled",
+				Path: "audit.logging_enabled", Operator: "is_true",
+				Reference: "CDB-AUD-1", Severity: "high",
+				Remediation: "Enable database audit logging."},
+			{ID: "CDB-3.2", Title: "Audit log retention meets baseline",
+				Path: "audit.retention_days", Operator: "gte", Expected: 90,
+				Reference: "CDB-AUD-2", Severity: "medium",
+				Remediation: "Retain audit logs for at least 90 days."},
+			{ID: "CDB-4.1", Title: "Anonymous or guest login is disabled",
+				Path: "auth.anonymous_login_enabled", Operator: "is_false",
+				Reference: "CDB-ACC-1", Severity: "critical",
+				Remediation: "Disable anonymous and guest login."},
+			{ID: "CDB-4.2", Title: "Default administrative account has been renamed",
+				Path: "accounts.default_admin_renamed", Operator: "is_true",
+				Reference: "CDB-ACC-2", Severity: "medium",
+				Remediation: "Rename the default administrative account."},
+			{ID: "CDB-5.1", Title: "Listener is not bound to all interfaces",
+				Path: "network.bind_address", Operator: "not_equals", Expected: "0.0.0.0",
+				Reference: "CDB-NET-3", Severity: "high",
+				Remediation: "Bind the listener to specific trusted interfaces."},
+			{ID: "CDB-6.1", Title: "Data-at-rest encryption is enabled",
+				Path: "storage.encryption_at_rest", Operator: "is_true",
+				Reference: "CDB-DAT-1", Severity: "high",
+				Remediation: "Enable transparent data-at-rest encryption."},
+			{ID: "CDB-7.1", Title: "Verbose error messages are not exposed to clients",
+				Path: "diagnostics.verbose_client_errors", Operator: "is_false",
+				Reference: "CDB-DIA-1", Severity: "low",
+				Remediation: "Disable verbose client-facing error messages."},
+		},
+	}
+}
