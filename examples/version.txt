@@ -1,0 +1,3 @@
+$ cisbench --version
+
+cisbench 0.1.0

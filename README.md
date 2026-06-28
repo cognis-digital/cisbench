@@ -43,6 +43,78 @@ fetch the authoritative NIST 800-53 OSCAL catalog once, then run fully offline
 - Python 3.10+
 - Standard library only — no third-party runtime dependencies.
 
+
+<!-- cognis:example:start -->
+## 🔎 Example output
+
+Real, reproducible output from the tool — runs offline:
+
+```console
+$ cisbench --version
+cisbench 0.1.0
+```
+
+```console
+$ cisbench --help
+usage: cisbench [-h] [--version]
+                {scan,list,check,crosswalk,feeds,active-scan} ...
+
+Offline CIS-benchmark-style configuration checker for database settings.
+Operates only on a provided inventory JSON; it never connects to a database.
+
+positional arguments:
+  {scan,list,check,crosswalk,feeds,active-scan}
+    scan                evaluate a profile against an inventory snapshot
+    list                list the checks in a profile
+    check               evaluate a single check by id
+    crosswalk           map each check to authoritative NIST 800-53 rev5
+                        controls
+    feeds               manage the edge/air-gap data-feed cache cisbench
+                        consumes
+    active-scan         OPTIONAL authorization-gated read-only probe of an
+                        allowlisted host (OFF by default; the passive 'scan'
+                        is the default mode)
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
+```
+
+```console
+$ cisbench list
+Profile: cognis-db-baseline (v1.0) — 12 checks
+Cognis Database Baseline: a vendor-neutral set of offline configuration-hardening checks for relational database deployments.
+========================================================================
+CDB-1.1    [critical] Transport encryption is required for client connections
+           ref=CDB-NET-1  path=network.require_tls  op=is_true
+CDB-1.2    [high    ] Minimum TLS protocol version is 1.2 or higher
+           ref=CDB-NET-2  path=network.min_tls_version  op=gte  expected=1.2
+CDB-2.1    [high    ] Password minimum length meets baseline
+           ref=CDB-AUTH-1  path=auth.password_min_length  op=gte  expected=14
+CDB-2.2    [medium  ] Password complexity enforcement is enabled
+           ref=CDB-AUTH-2  path=auth.password_complexity_enabled  op=is_true
+CDB-2.3    [medium  ] Failed-login lockout threshold is configured
+           ref=CDB-AUTH-3  path=auth.failed_login_lockout_threshold  op=lte  expected=10
+CDB-3.1    [high    ] Audit logging is enabled
+           ref=CDB-AUD-1  path=audit.logging_enabled  op=is_true
+CDB-3.2    [medium  ] Audit log retention meets baseline
+           ref=CDB-AUD-2  path=audit.retention_days  op=gte  expected=90
+CDB-4.1    [critical] Anonymous or guest login is disabled
+           ref=CDB-ACC-1  path=auth.anonymous_login_enabled  op=is_false
+CDB-4.2    [medium  ] Default administrative account has been renamed
+           ref=CDB-ACC-2  path=accounts.default_admin_renamed  op=is_true
+CDB-5.1    [high    ] Listener is not bound to all interfaces
+           ref=CDB-NET-3  path=network.bind_address  op=not_equals  expected='0.0.0.0'
+CDB-6.1    [high    ] Data-at-rest encryption is enabled
+           ref=CDB-DAT-1  path=storage.encryption_at_rest  op=is_true
+CDB-7.1    [low     ] Verbose error messages are not exposed to clients
+           ref=CDB-DIA-1  path=diagnostics.verbose_client_errors  op=is_false
+```
+
+> Blocks above are real `cisbench` output — reproduce them from a clone.
+
+<!-- cognis:example:end -->
+
 ## Why offline?
 
 Many configuration-assessment tools require live credentials and network access

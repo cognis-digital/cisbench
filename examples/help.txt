@@ -1,0 +1,24 @@
+$ cisbench --help
+
+usage: cisbench [-h] [--version]
+                {scan,list,check,crosswalk,feeds,active-scan} ...
+
+Offline CIS-benchmark-style configuration checker for database settings.
+Operates only on a provided inventory JSON; it never connects to a database.
+
+positional arguments:
+  {scan,list,check,crosswalk,feeds,active-scan}
+    scan                evaluate a profile against an inventory snapshot
+    list                list the checks in a profile
+    check               evaluate a single check by id
+    crosswalk           map each check to authoritative NIST 800-53 rev5
+                        controls
+    feeds               manage the edge/air-gap data-feed cache cisbench
+                        consumes
+    active-scan         OPTIONAL authorization-gated read-only probe of an
+                        allowlisted host (OFF by default; the passive 'scan'
+                        is the default mode)
+
+options:
+  -h, --help            show this help message and exit
+  --version             show program's version number and exit
